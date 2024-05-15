@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>contifico</name>
+    <displayName><![CDATA[Contifico]]></displayName>
+    <version><![CDATA[2.0.2]]></version>
+    <description><![CDATA[Administraci&oacute;n y log&iacute;stica contifico]]></description>
+    <author><![CDATA[LRobles]]></author>
+    <tab><![CDATA[administration]]></tab>
+    <is_configurable>1</is_configurable>
+    <need_instance>1</need_instance>
+	<limited_countries></limited_countries>
+</module>
