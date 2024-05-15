@@ -52,104 +52,12 @@ class ContificoRequest
         return json_decode($response);
     }
 
-    public static function test()
-    {
-        if ($customer_contifico) {
-            $online_customer = self::checkCustomerContificoOnline($customer_contifico, $apiKey);
-        }
-
-        $type_doc = Configuration::get("type_dni_" . $id_customer);
-        $type_persona = Configuration::get("type_per_" . $id_customer);
-        $nombre_empresa = Configuration::get("name_juridit_" . $id_customer);
-        $billingAddres = new Address((int)$order->id_address_invoice);
-
-        $customer_request = array(
-            "tipo" => ($type_persona && $type_persona != '') ? $type_persona : "N",
-            "razon_social" => ($nombre_empresa && $nombre_empresa != '') ? $nombre_empresa : $customer->firstname . " " . $customer->lastname,
-            "es_cliente" => 1,
-            "es_proveedor" => 0,
-            "email" => $customer->email,
-            "nombre_comercial" => $customer->firstname . " " . $customer->lastname,
-            "direccion" => $billingAddres->address1,
-            "telefonos" => $billingAddres->phone_mobile != '' ? $billingAddres->phone_mobile : $billingAddres->phone
-        );
-
-        if ($type_doc == "ruc") {
-            $type_doc_fac = "ruc";
-            $customer_request['ruc'] = $billingAddres->dni;
-            $customer_request['cedula'] = substr($billingAddres->dni, 0, -3);
-        } else {
-            $type_doc_fac = "cedula";
-            $customer_request['cedula'] = $billingAddres->dni;
-        }
-
-        $where = '';
-        $method = "POST";
-        $createOrUpdate = true;
-
-        if ($online_customer) {
-            $createOrUpdate = self::isNecesarioActualizar($online_customer, $customer_request);
-            if ($createOrUpdate) {
-                $method = "PUT";
-                $customer_request['id'] = $online_customer['id'];
-                $where = "customer_id = $id_customer";
-            }
-        }
-
-        if ($createOrUpdate) {
-            $post_customer = self::postCreatePersoneInContifico($customer_request, $apiKey, $token, $method);
-            $customer_contifico = array(
-                "contifico_id" => $post_customer['id'],
-                "tipo" => $customer_request['tipo'],
-                "type_doc" => $type_doc_fac,
-                "direccion" => $customer_request['direccion'],
-                "email" => $customer_request['email'],
-                "telefonos" => $customer_request['telefonos'],
-                "razon_social" => $customer_request['razon_social'],
-                "date_creation" => date("Y-m-d h:i"),
-                "cedula" => $billingAddres->dni,
-                "ruc" => $billingAddres->dni,
-            );
-
-            if ($where != '') {
-                Db::getInstance()->update('customers_contifico', $customer_contifico, $where);
-            } else {
-                $customer_contifico['customer_id'] = $id_customer;
-                Db::getInstance()->insert('customers_contifico', $customer_contifico);
-            }
-        }
-
-        // update por si el tipo de documento viene vacio
-        if ($customer_contifico['type_doc'] == "" || $customer_contifico['type_doc'] == 0 || !$customer_contifico['type_doc']) {
-            $customer_contifico['type_doc'] = $type_doc_fac;
-        }
-
-        return $customer_contifico;
-    }
-
-
     public static function getCustomerContifico($customer,  $apiKey, $order, $token)
     {
         $id_customer = $customer->id;
-        $sqlid_product = "select * from " . _DB_PREFIX_ . "customers_contifico where customer_id = $id_customer";
-        $customer_contifico = Db::getInstance(_PS_USE_SQL_SLAVE_)->getRow($sqlid_product);
+       
         $billingAddres = new Address((int)$order->id_address_invoice);
-        if ($customer_contifico) {
-            $online_customer = self::checkCustomerContificoOnline($customer_contifico, $apiKey);
-            if ($online_customer) {
-                // actualizar la info
-                $customer_request = array(
-                    "direccion" => $billingAddres->address1,
-                    "telefonos" => $billingAddres->phone_mobile != '' ? $billingAddres->phone_mobile : $billingAddres->phone
-                );
-                self::postCreatePersoneInContifico($customer_request, $apiKey, $token, "PUT");
-                return $customer_contifico;
-            } else {
-                // eliminar de la base de datos
-                Db::getInstance()->delete('customers_contifico', "email = " . $customer_contifico['id']);
-            }
-        }
-        // crear
+
         $type_doc = Configuration::get("type_dni_" . $id_customer);
         $type_persona = Configuration::get("type_per_" . $id_customer);
         $nombre_empresa = Configuration::get("name_juridit_" . $id_customer);
@@ -164,7 +72,6 @@ class ContificoRequest
             "direccion" => $billingAddres->address1,
             "telefonos" => $billingAddres->phone_mobile != '' ? $billingAddres->phone_mobile : $billingAddres->phone
         );
-
 
         if ($type_doc == "ruc") {
             $type_doc_fac = "ruc";
@@ -174,6 +81,34 @@ class ContificoRequest
             $type_doc_fac = "cedula";
             $customer_request['ruc'] = "";
             $customer_request['cedula'] = $billingAddres->dni;
+        }
+
+        $sqlid_product = "select * from " . _DB_PREFIX_ . "customers_contifico where customer_id = $id_customer";
+        $isExist = Db::getInstance(_PS_USE_SQL_SLAVE_)->getRow($sqlid_product);
+
+        $customer_contifico = array(
+            "customer_id" => $id_customer,
+            "tipo" => $customer_request['tipo'],
+            "type_doc" => $type_doc_fac,
+            "direccion" => $customer_request['direccion'],
+            "email" => $customer_request['email'],
+            "telefonos" => $customer_request['telefonos'],
+            "razon_social" => $customer_request['razon_social'],
+            "date_creation" => date("Y-m-d h:i"),
+            "cedula" =>  $customer_request['cedula'],
+            "ruc" =>  $customer_request['ruc'],
+        );
+        
+        if ($isExist) {
+            $online_customer = self::checkCustomerContificoOnline($isExist, $apiKey);
+            if ($online_customer) {
+                $customer_request = array(
+                    "direccion" => $billingAddres->address1,
+                    "telefonos" => $billingAddres->phone_mobile != '' ? $billingAddres->phone_mobile : $billingAddres->phone
+                );
+                self::postCreatePersoneInContifico($customer_request, $apiKey, $token, "PUT");
+                return $customer_contifico;
+            }
         }
 
         $post_customer = self::postCreatePersoneInContifico($customer_request, $apiKey, $token, "POST");
@@ -194,19 +129,8 @@ class ContificoRequest
             }
         }
 
-        $customer_contifico = array(
-            "contifico_id" => $post_customer['id'],
-            "customer_id" => $id_customer,
-            "tipo" => $customer_request['tipo'],
-            "type_doc" => $type_doc_fac,
-            "direccion" => $customer_request['direccion'],
-            "email" => $customer_request['email'],
-            "telefonos" => $customer_request['telefonos'],
-            "razon_social" => $customer_request['razon_social'],
-            "date_creation" => date("Y-m-d h:i"),
-            "cedula" =>  $customer_request['cedula'],
-            "ruc" =>  $customer_request['ruc'],
-        );
+        $customer_contifico["contifico_id"] = $post_customer['id'];
+      
 
         Db::getInstance()->insert('customers_contifico', $customer_contifico);
         return $customer_contifico;
@@ -214,17 +138,18 @@ class ContificoRequest
 
     public static function checkCustomerContificoOnline($customer_contifico, $apiKey)
     {
-        $customer_contifico_get = false;
+        $idValid = true;
         if ($customer_contifico['contifico_id'] != null) {
             $customer_contifico_get = self::getCustomerConfitico($customer_contifico['contifico_id'], $apiKey);
             if (array_key_exists('mensaje', $customer_contifico_get)) {
                 Db::getInstance()->delete('customers_contifico', "customer_id = " . $customer_contifico['customer_id']);
-                return false;
+                $idValid = false;
             }
         } else {
             Db::getInstance()->delete('customers_contifico', "customer_id = " . $customer_contifico['customer_id']);
+            $idValid = false;
         }
-        return $customer_contifico_get;
+        return $idValid;
     }
 
     public static function getCustomerConfitico($id, $apiKey)
